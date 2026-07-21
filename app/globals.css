@@ -1,26 +1,120 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* 
+      MODULAR TYPOGRAPHY SYSTEM
+      To swap between "Editorial" and "Modern Tech":
+      - For Editorial: --font-primary is Serif, --font-secondary is Sans, --font-mono is Mono.
+      - For Modern Tech: set --font-primary to var(--font-secondary) or another modern geometric sans.
+    */
+    --font-primary-family: var(--font-primary, 'Instrument Serif', serif);
+    --font-secondary-family: var(--font-secondary, 'Inter', sans-serif);
+    --font-mono-family: var(--font-mono, 'JetBrains Mono', monospace);
+
+    --bg-primary: #FAFAFA; /* Crisp off-white paper */
+    --bg-card: #FFFFFF; /* Pure white for depth */
+    --border-card: #E5E7EB; /* Subtle light gray */
+    --text-primary: #111827; /* Deep charcoal (NOT pure black) */
+    --text-secondary: #4B5563; /* Readable slate gray for body */
+    --text-muted: #9CA3AF; /* Light gray for metadata */
+    
+    /* We must use a darker emerald for light mode to ensure contrast */
+    --accent: #059669; 
+    --accent-subtle: #D1FAE5; /* Very soft emerald background for hovers */
+  }
+
+  .dark {
+    /* DO NOT TOUCH THE EXISTING DARK MODE VARIABLES */
+    --bg-primary: #0A0D14;
+    --bg-card: rgba(15, 23, 42, 0.25);
+    --border-card: rgba(255, 255, 255, 0.07);
+    --text-primary: #FFFFFF;
+    --text-secondary: #94A3B8; /* slate-400 */
+    --text-muted: #64748B;
+    --accent: #34D399; /* Emerald 400 */
+    --accent-subtle: rgba(52, 211, 153, 0.08);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-card: var(--bg-card);
+  --color-border-card: var(--border-card);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --font-primary: var(--font-primary-family);
+  --font-secondary: var(--font-secondary-family);
+  --font-mono: var(--font-mono-family);
 }
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-secondary-family);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.4);
+}
+
+@keyframes marquee-left-to-right {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+
+@keyframes marquee-right-to-left {
+  0% {
+    transform: translate3d(0%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee-left-to-right {
+  animation: marquee-left-to-right 65s linear infinite;
+}
+
+.animate-marquee-left-to-right-slow {
+  animation: marquee-left-to-right 80s linear infinite;
+}
+
+.animate-marquee-right-to-left {
+  animation: marquee-right-to-left 65s linear infinite;
+}
+
+.animate-marquee-right-to-left-slow {
+  animation: marquee-right-to-left 80s linear infinite;
+}
+
+.animate-marquee-left-to-right:hover,
+.animate-marquee-left-to-right-slow:hover,
+.animate-marquee-right-to-left:hover,
+.animate-marquee-right-to-left-slow:hover {
+  animation-play-state: paused;
+}
+

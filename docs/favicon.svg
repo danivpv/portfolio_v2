@@ -1,0 +1,14 @@
+<svg 
+  viewBox="0 0 24 24" 
+  fill="none" 
+  xmlns="http://www.w3.org/2000/svg"
+  className="w-48 h-48 mb-8" 
+>
+  <path 
+    d="M2 4L12 22L22 4H2Z" 
+    stroke="#D97706" /* Tailwind amber-600 for Gold, or use #059669 for Copper Green */
+    strokeWidth="0.5" /* Ultra-thin editorial stroke */
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+  />
+</svg>
