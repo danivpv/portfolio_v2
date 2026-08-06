@@ -1,6 +1,18 @@
-# What an ML Platform Actually Is and Why I Built One Instead of Certifying for One
+---
+canonical_url: https://danivpv.com/blog/beyond-the-notebook
+published: false
+series: ML Engineering
+part: 1
+title: "Beyond the Notebook: The Operational Reality of an Enterprise ML Platform"
+tags: [mlops, aws, mlflow, feast, python]
+date: 2026-07-18
+summary: "Data scientists solve the last-mile problem. ML engineers build the road. Here is what the ML platform engineer's piece actually looks like when built from scratch, grounded in 27 architectural decisions and hard-earned production lessons."
+cover_image:
+---
 
-Data scientists solve the last-mile problem. AI/ML/Data/Software engineers build the road. Most organizations get this stack wrong: either by not covering them all, or by siloing them so hard the systems never talk and ownership erodes to everyone and no one. This post is my attempt to understand what the ML platform engineer's piece actually looks like when built from scratch, grounded in 27 architectural decisions and hard-earned production lessons.
+# Beyond the Notebook: The Operational Reality of an Enterprise ML Platform
+
+Data scientists solve the last-mile problem. ML engineers build the road. Data engineers build what the road runs on. Most organizations get this stack wrong: either by not covering them all, or by siloing them so hard the systems never talk and ownership erodes to everyone and no one. This post deconstructs the ML platform engineer's piece—built from scratch across 2 CDK stacks, 4 Fargate tasks, and 3 persistent stores, yielding a ~$0/day idle cost and 11 tough production bugs.
 
 ---
 
@@ -56,12 +68,12 @@ Each subsystem serves a specific operational purpose, backed by explicit enginee
 3. **Decoupled Compute Subsystem (Training vs. Batch Inference Tasks)**: I built decoupled inference and training tasks so they evolve and scale independently. During scheduled serving, inference containers do not need to store training gradients or heavy autograd trees. This separation allows inference jobs to run on lean Fargate profiles optimized for latency SLAs while training jobs consume high-memory burst compute.
 4. **Observability & Safeguard Subsystem (CloudWatch + IAM Boundaries)**: A model that fails silently destroys business trust. I monitored infrastructure health (`TaskCount`, memory utilization, and failure alarms) from day one, establishing the baseline needed to monitor model accuracy and data drift later. Furthermore, hard IAM policy boundaries guarantee that inference tasks can write only to designated prediction prefixes, preventing accidental data plane corruption.
 
-Next, we will dive into how I implemented these core subsystems, the architectural trade-offs behind each decision, and four noteworthy/annoying AWS edge-case bugs discovered along the way. You can clone and check out the exact working implementation (`commit 4c60434`) directly from the [GitHub repository](https://github.com/danivpv/ml-platform/tree/4c6043475e7d2725b2d2a7d5a3e0eae669e125df):
+Next, we will dive into how I implemented these core subsystems, the architectural trade-offs behind each decision, and four noteworthy/annoying AWS edge-case bugs discovered along the way. You can clone and check out the exact working implementation (`commit 4c60434`) directly from the [GitHub repository](https://github.com/danivpv/ml-platform/tree/41f9d85d0a882fbc37fa829c2935b76e140511c9):
 
 ```bash
 git clone https://github.com/danivpv/ml-platform.git
 cd ml-platform
-git checkout 4c6043475e7d2725b2d2a7d5a3e0eae669e125df
+git checkout 41f9d85d0a882fbc37fa829c2935b76e140511c9
 ```
 
 ---
@@ -118,7 +130,9 @@ class MLPlatformStatelessStack(Stack):
 
 Stateful resources (S3 buckets, DynamoDB table, RDS Postgres database) carry `RemovalPolicy.RETAIN`. The stateless control plane iterates freely: new Fargate task definitions, updated EventBridge schedules, modified CloudWatch dashboards. Because the stateless stack can be destroyed and redeployed completely from scratch without touching the underlying storage, I can iterate on the training container image or adjust memory limits without any risk of corrupting historical feature data or experiment tracking history. That guarantee is structural rather than a team convention. Conventions break under deadline pressure; CDK cross-stack separation does not.
 
-This strict two-stack layout directly implements official AWS engineering best practices: structuring `app.py` as a modular Well-Architected Framework component, isolating persistent storage (`RemovalPolicy.RETAIN`) from stateless compute tiers, and passing typed Python construct references to resolve all least-privilege IAM policies at **synthesis time (`cdk synth`)** with zero runtime network traffic (detailed in [External References](#external-references-and-aws-cdk-best-practices) below).
+As a student, I once left a SageMaker notebook instance running for a month because the underlying AWS resources were hidden behind an opaque abstraction. Platform engineering flips that model. Because the infrastructure is versioned Python, destroying the entire compute environment is a single `cdk destroy` command. It eliminates the silent financial risk of opaque managed platforms while guaranteeing the `RemovalPolicy.RETAIN` data plane survives.
+
+This strict two-stack layout directly implements official AWS engineering best practices: structuring `app.py` as a modular Well-Architected Framework component, isolating persistent storage from stateless compute tiers, and passing typed Python construct references to resolve all least-privilege IAM policies at **synthesis time (`cdk synth`)** with zero runtime network traffic.
 
 ---
 
@@ -256,7 +270,7 @@ The table below summarizes the four core operational questions the platform must
 
 An engineering decision log is not bureaucratic paperwork; it is the core architectural argument. The distinction between a platform engineer and an engineer who simply uses tools lies in whether you can explain every trade-off in exact cost and performance terms, and identify what you would modify if constraints shifted. 
 
-The project requirement document inside the [repository](https://github.com/danivpv/ml-platform/tree/4c6043475e7d2725b2d2a7d5a3e0eae669e125df) contains a [27-entry architectural decision log](https://github.com/danivpv/ml-platform/blob/4c6043475e7d2725b2d2a7d5a3e0eae669e125df/docs/ml-platform-prd.md#2-architectural-decision-log) justifying every design choice against concrete constraints:
+The project requirement document inside the [repository](https://github.com/danivpv/ml-platform/tree/41f9d85d0a882fbc37fa829c2935b76e140511c9) contains a [27-entry architectural decision log](https://github.com/danivpv/ml-platform/blob/41f9d85d0a882fbc37fa829c2935b76e140511c9/docs/ml-platform-prd.md#2-architectural-decision-log) justifying every design choice against concrete constraints:
 
 - **DynamoDB `PAY_PER_REQUEST` over Redis**: Yields literally zero cost at idle while serializing composite entity keys (`customer#1004`) into a single partition key, serving all future models without requiring schema migrations or continuous node costs.
 - **NAT Gateway deferred**: Avoids ~$32/month in fixed hourly charges for private subnets that our S3 and DynamoDB API endpoints do not require.
@@ -269,7 +283,7 @@ Furthermore, physical infrastructure realities dictate task orchestration. My de
 
 ## Production Realities: Four Bugs That Tested the System
 
-Even with strict upfront design rigor, production cloud deployments reveal subtle edge cases. My [project deployment log documents 11 real bugs](https://github.com/danivpv/ml-platform/blob/4c6043475e7d2725b2d2a7d5a3e0eae669e125df/docs/ml-platform-prd.md#3-bug-and-resolution-log), labeled A through K. Rather than skipping straight to the "happy path," examining real AWS infrastructure edge cases reveals how the platform behaves under real-world constraints.
+Even with strict upfront design rigor, production cloud deployments reveal subtle edge cases. My [project deployment log documents 11 real bugs](https://github.com/danivpv/ml-platform/blob/41f9d85d0a882fbc37fa829c2935b76e140511c9/docs/ml-platform-prd.md#3-bug-and-resolution-log), labeled A through K. Rather than skipping straight to the "happy path," examining real AWS infrastructure edge cases reveals how the platform behaves under real-world constraints.
 
 Here is a summary of four particularly tricky technical investigations encountered during deployment:
 
@@ -340,28 +354,32 @@ ec2.CfnSecurityGroupIngress(
 
 ---
 
-## Conclusion: Where We Go Next, The Repo, and Call to Action
+## Where We Go Next
 
 Part 2 of this series examines what breaks when you introduce a second ML model to the platform. Moving from single-model to multi-model operations requires replacing hardcoded model identifiers in `train.py` and `predict.py` with a queryable model catalog inside RDS Postgres, implementing a factory dispatch pattern for trainers, and dynamically provisioning EventBridge schedules via API so onboarding model N+1 never requires running `cdk deploy`.
 
-### The Repository & Decision Log
-The complete source code, CDK infrastructure, and commit-locked rationale behind every trade-off discussed in this post reside in the official repository:
-- **Source Code (`commit 4c60434`)**: [github.com/danivpv/ml-platform](https://github.com/danivpv/ml-platform/tree/4c6043475e7d2725b2d2a7d5a3e0eae669e125df)
-- **27-Entry Architectural Decision Log**: [PRD Section 2](https://github.com/danivpv/ml-platform/blob/4c6043475e7d2725b2d2a7d5a3e0eae669e125df/docs/ml-platform-prd.md#2-architectural-decision-log)
-- **11 Production Bug Investigations**: [PRD Section 3](https://github.com/danivpv/ml-platform/blob/4c6043475e7d2725b2d2a7d5a3e0eae669e125df/docs/ml-platform-prd.md#3-bug-and-resolution-log)
-
-### AWS CDK Best Practices References
-The two-stack infrastructure design directly adapts official AWS engineering guidance:
-1. **[Recommended AWS CDK Project Structure for Python Applications](https://aws.amazon.com/blogs/developer/recommended-aws-cdk-project-structure-for-python-applications/)** *(AWS Developer Tools Blog)*: Maps `app.py` to a Well-Architected Framework component (`component.py`) and separates logical constructs (`cdk.Construct`) from deployment stacks (`cdk.Stack`).
-2. **[Best Practices for Developing Cloud Applications with AWS CDK](https://aws.amazon.com/blogs/devops/best-practices-for-developing-cloud-applications-with-aws-cdk/)** *(AWS DevOps Blog)*: Outlines stateful vs. stateless stack separation (`RemovalPolicy.RETAIN`), synthesis-time decision making (`cdk synth`), and deterministic deployments via `cdk.context.json`.
-
 ### Join the Conversation
-If you are building production ML platforms, navigating stateful vs. stateless boundaries in AWS CDK, or designing architectural safeguards that bridge data science and operations, let's connect:
-1. **Explore the Code**: Check out the [repository at commit `4c60434`](https://github.com/danivpv/ml-platform/tree/4c6043475e7d2725b2d2a7d5a3e0eae669e125df).
-2. **Share Your Experience**: How does your team handle the boundary between data science model iteration and production infrastructure deployment? Share your trade-offs in the comments below or reach out directly on [LinkedIn](https://linkedin.com/in/danivpv).
+
+If you are building production ML platforms, navigating stateful vs. stateless boundaries in AWS CDK, or designing architectural safeguards that bridge data science and operations, let's connect. 
+
+How does your team handle the boundary between data science model iteration and production infrastructure deployment? Share your trade-offs in the comments below or reach out directly on [LinkedIn](https://linkedin.com/in/danivpv).
 
 ---
 
 *Daniel Ivan Parra Verde is an ML Engineer specializing in production AI agents, distributed systems, and ML platforms. He authored both the CDK infrastructure and the runtime services for this project.*
 
 *[GitHub](https://github.com/danivpv) · [LinkedIn](https://linkedin.com/in/danivpv)*
+
+---
+
+### Appendix: Source Code & References
+
+The complete source code, CDK infrastructure, and commit-locked rationale behind every trade-off discussed in this post reside in the official repository:
+- **Source Code (`commit 4c60434`)**: [github.com/danivpv/ml-platform](https://github.com/danivpv/ml-platform/tree/41f9d85d0a882fbc37fa829c2935b76e140511c9)
+- **27-Entry Architectural Decision Log**: [PRD Section 2](https://github.com/danivpv/ml-platform/blob/41f9d85d0a882fbc37fa829c2935b76e140511c9/docs/ml-platform-prd.md#2-architectural-decision-log)
+- **11 Production Bug Investigations**: [PRD Section 3](https://github.com/danivpv/ml-platform/blob/41f9d85d0a882fbc37fa829c2935b76e140511c9/docs/ml-platform-prd.md#3-bug-and-resolution-log)
+
+**AWS CDK Best Practices:**
+The two-stack infrastructure design directly adapts official AWS engineering guidance:
+1. **[Recommended AWS CDK Project Structure for Python Applications](https://aws.amazon.com/blogs/developer/recommended-aws-cdk-project-structure-for-python-applications/)**: Maps `app.py` to a Well-Architected Framework component (`component.py`) and separates logical constructs (`cdk.Construct`) from deployment stacks (`cdk.Stack`).
+2. **[Best Practices for Developing Cloud Applications with AWS CDK](https://aws.amazon.com/blogs/devops/best-practices-for-developing-cloud-applications-with-aws-cdk/)**: Outlines stateful vs. stateless stack separation (`RemovalPolicy.RETAIN`), synthesis-time decision making (`cdk synth`), and deterministic deployments via `cdk.context.json`.

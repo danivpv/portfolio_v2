@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/blog/what-an-ml-platform-actually-is",
+        destination: "/blog/beyond-the-notebook",
+        permanent: true,
+      },
+      {
         source: "/education",
         destination: "/#experience",
         permanent: true,
